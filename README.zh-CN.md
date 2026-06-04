@@ -1,14 +1,14 @@
 # geo-mcp-worker
 
-Geo MCP Server — 为 AI Agent 提供地理空间计算能力。
+Geo MCP 服务器 — 为 AI Agent 提供地理空间计算能力。
 
 部署在 Cloudflare Workers，基于 Nominatim / Overpass / OSRM，**完全免费、无需 API Key、无状态**。
 
-**Endpoint**: `https://geo-mcp.qdp.qzz.io/mcp`
+**在线地址**: `https://geo-mcp.qdp.qzz.io/mcp`
 
-English | **[中文](./README.zh-CN.md)**
+**[English](./README.md)** | 中文
 
-## Tools
+## 工具列表
 
 | 工具 | 功能 | 数据源 |
 |---|---|---|
@@ -52,7 +52,7 @@ POST /mcp
 
 ### 1. 地址 → 坐标 (`geo_geocode`)
 
-**请求:**
+**请求：**
 ```json
 {
   "jsonrpc": "2.0", "id": 1,
@@ -64,7 +64,7 @@ POST /mcp
 }
 ```
 
-**响应:**
+**响应：**
 ```json
 {
   "ok": true,
@@ -81,7 +81,7 @@ POST /mcp
 }
 ```
 
-**学校名也支持:**
+**学校名也支持：**
 ```json
 { "address": "向明中学浦江校区" }
 → lat=31.075575, lon=121.496283
@@ -92,7 +92,7 @@ POST /mcp
 
 ### 2. 坐标 → 地址 (`geo_reverse`)
 
-**请求:**
+**请求：**
 ```json
 {
   "name": "geo_reverse",
@@ -100,7 +100,7 @@ POST /mcp
 }
 ```
 
-**响应:**
+**响应：**
 ```json
 {
   "ok": true,
@@ -118,25 +118,21 @@ POST /mcp
 
 ### 3. 周边 POI 搜索 (`geo_find_poi`)
 
-**搜索地铁站:**
+**搜索地铁站：**
 ```json
 {
   "name": "geo_find_poi",
   "arguments": {
-    "lat": 31.169501,
-    "lon": 121.453866,
-    "category": "subway",
-    "radius_m": 1000,
-    "limit": 5
+    "lat": 31.169501, "lon": 121.453866,
+    "category": "subway", "radius_m": 1000, "limit": 5
   }
 }
 ```
 
-**响应:**
+**响应：**
 ```json
 {
   "ok": true,
-  "center": { "lat": 31.169501, "lon": 121.453866 },
   "count": 4,
   "results": [
     { "name": "云锦路",   "distance_m": 0,   "category": "subway" },
@@ -147,7 +143,7 @@ POST /mcp
 }
 ```
 
-**搜索餐厅:**
+**搜索餐厅：**
 ```json
 { "lat": 31.240168, "lon": 121.497945, "category": "restaurant", "radius_m": 500 }
 ```
@@ -158,11 +154,11 @@ Win House — 387m
 Hooters — 457m | burger
 ```
 
-**支持的 POI 类型:** `restaurant`, `cafe`, `school`, `hospital`, `clinic`, `pharmacy`, `bank`, `atm`, `supermarket`, `convenience`, `subway`, `bus_stop`, `park`, `gym`, `cinema`, `library`, `kindergarten`, `police`, `fire_station`, `post_office`, `parking`, `fuel`, `marketplace`
+**支持的 POI 类型：** `restaurant`, `cafe`, `school`, `hospital`, `clinic`, `pharmacy`, `bank`, `atm`, `supermarket`, `convenience`, `subway`, `bus_stop`, `park`, `gym`, `cinema`, `library`, `kindergarten`, `police`, `fire_station`, `post_office`, `parking`, `fuel`, `marketplace`
 
 ### 4. 路径规划 (`geo_route`)
 
-**驾车:**
+**驾车：**
 ```json
 {
   "name": "geo_route",
@@ -177,7 +173,7 @@ Hooters — 457m | burger
 distance=12609m (12.6km)  duration=14.7min  confidence=high
 ```
 
-**步行（长距离自动校准）:**
+**步行（长距离自动校准）：**
 ```json
 {
   "from": { "lat": 31.075575, "lon": 121.496283 },
@@ -219,11 +215,11 @@ Geo MCP 只做空间计算，不做语义搜索。典型协同流程：
 
 ## 设计约束
 
-- **无状态**: 禁用 CF KV，所有数据实时 API 获取
-- **零鉴权**: 全部使用公开免费 API，无需 API Key
-- **坐标精度**: 统一 `toFixed(6)` 截断
-- **步行校准**: OSRM 步行 >2km 自动按 80m/min 重算
-- **语义化错误**: `{ ok: false, reason: "poi_not_found", message: "..." }` 供 Agent 判断重试策略
+- **无状态**：禁用 CF KV，所有数据实时 API 获取
+- **零鉴权**：全部使用公开免费 API，无需 API Key
+- **坐标精度**：统一 `toFixed(6)` 截断
+- **步行校准**：OSRM 步行 >2km 自动按 80m/min 重算
+- **语义化错误**：`{ ok: false, reason: "poi_not_found", message: "..." }` 供 Agent 判断重试策略
 
 ## 部署
 
@@ -237,7 +233,7 @@ curl -X PUT \
   -F "index.js=@src/index.js;type=application/javascript+module"
 ```
 
-`metadata.json`:
+`metadata.json`：
 ```json
 { "main_module": "index.js", "compatibility_date": "2026-04-08" }
 ```
@@ -246,12 +242,12 @@ curl -X PUT \
 
 详见 [GEO_TRANSIT_RESEARCH_REPORT.txt](./GEO_TRANSIT_RESEARCH_REPORT.txt)（28 个项目全量调研）。
 
-| Layer | 方案 | 覆盖 | 状态 |
+| 层级 | 方案 | 覆盖 | 状态 |
 |---|---|---|---|
 | Layer 0 | OSRM + Nominatim + Overpass | 全球驾车/步行/POI | ✅ 已部署 |
 | Layer 1 | Transitous | 海外公交/地铁 | 📋 调研完成 |
 | Layer 2 | 高德 API | 中国公交/地铁 | 📋 调研完成 |
 
-## License
+## 许可证
 
 GPL-3.0
