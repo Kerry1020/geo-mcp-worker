@@ -209,7 +209,7 @@ async function handleRoute(args) {
 const TOOLS = [
   {
     name: "geo_geocode",
-    description: "将地址文本转换为经纬度坐标（正向地理编码）。支持中文地址。使用 OpenStreetMap Nominatim，免费无需 API key。返回坐标、完整地址、类型和重要性。当 search_mcp 返回房源地址时，先用此工具转为坐标，再调用 geo_find_poi 查询周边设施。",
+    description: "将结构化地址文本转换为经纬度坐标（正向地理编码）。仅接受路名、门牌号、小区名、地标等地理地址。⚠️ 不接受企业名/公司名/品牌名（如'中电金信'、'星巴克'），此类输入请先调用 search_mcp 获取实际地址文本，再将地址传入本工具。正确用法：'上海市徐汇区云锦路'。错误用法：'中电金信上海'。使用 OpenStreetMap Nominatim，免费无需 API key。",
     inputSchema: {
       type: "object",
       properties: {
