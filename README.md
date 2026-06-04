@@ -1,8 +1,8 @@
 # geo-mcp-worker
 
-Geo MCP Server — 为 AI Agent 提供地理空间计算能力。
+Geo MCP Server — Geospatial computation for AI agents.
 
-部署在 Cloudflare Workers，基于 Nominatim / Overpass / OSRM，**完全免费、无需 API Key、无状态**。
+Deployed on Cloudflare Workers. Powered by Nominatim / Overpass / OSRM. **Free, no API key, stateless.**
 
 **Endpoint**: `https://geo-mcp.qdp.qzz.io/mcp`
 
@@ -10,23 +10,23 @@ English | **[中文](./README.zh-CN.md)**
 
 ## Tools
 
-| 工具 | 功能 | 数据源 |
+| Tool | Description | Source |
 |---|---|---|
-| `geo_geocode` | 地址文本 → 经纬度坐标 | Nominatim (OSM) |
-| `geo_reverse` | 经纬度坐标 → 地址文本 | Nominatim (OSM) |
-| `geo_find_poi` | 坐标周边 POI 搜索（20+ 类型） | Overpass API (OSM) |
-| `geo_route` | 点到点路径距离/时间（驾车/步行/骑行） | OSRM |
+| `geo_geocode` | Address text → lat/lon coordinates | Nominatim (OSM) |
+| `geo_reverse` | Lat/lon → address text | Nominatim (OSM) |
+| `geo_find_poi` | Nearby POI search (20+ categories) | Overpass API (OSM) |
+| `geo_route` | Point-to-point distance & duration (driving/walking/cycling) | OSRM |
 
-## 协议
+## Protocol
 
-MCP (JSON-RPC 2.0)，与 [search-mcp-worker](https://github.com/Kerry1020/search-mcp-worker) 完全一致。
+MCP (JSON-RPC 2.0), compatible with [search-mcp-worker](https://github.com/Kerry1020/search-mcp-worker).
 
-- `POST /mcp` — MCP 端点
-- `GET /health` — 健康检查
+- `POST /mcp` — MCP endpoint
+- `GET /health` — Health check
 
-## 快速开始
+## Quick Start
 
-### 初始化
+### Initialize
 
 ```json
 POST /mcp
@@ -42,17 +42,17 @@ POST /mcp
 }
 ```
 
-### 列出工具
+### List tools
 
 ```json
 { "jsonrpc": "2.0", "id": 2, "method": "tools/list" }
 ```
 
-## 实测示例
+## Live API Examples
 
-### 1. 地址 → 坐标 (`geo_geocode`)
+### 1. Geocode (`geo_geocode`)
 
-**请求:**
+**Request:**
 ```json
 {
   "jsonrpc": "2.0", "id": 1,
@@ -64,7 +64,7 @@ POST /mcp
 }
 ```
 
-**响应:**
+**Response:**
 ```json
 {
   "ok": true,
@@ -81,18 +81,18 @@ POST /mcp
 }
 ```
 
-**学校名也支持:**
+**School names work too:**
 ```json
 { "address": "向明中学浦江校区" }
 → lat=31.075575, lon=121.496283
 → "向明中学（浦江校区）, 浦锦路, 浦锦街道, 勤俭, 闵行区, 上海市, 201112, 中国"
 ```
 
-> ⚠️ 不支持企业名/品牌名（如"中电金信"）。此类输入请先通过 search-mcp 获取地址，再传入 geo_geocode。
+> ⚠️ Does not accept company/brand names (e.g. "中电金信"). For such queries, use search-mcp first to get the street address, then pass it to geo_geocode.
 
-### 2. 坐标 → 地址 (`geo_reverse`)
+### 2. Reverse Geocode (`geo_reverse`)
 
-**请求:**
+**Request:**
 ```json
 {
   "name": "geo_reverse",
@@ -100,7 +100,7 @@ POST /mcp
 }
 ```
 
-**响应:**
+**Response:**
 ```json
 {
   "ok": true,
@@ -116,27 +116,23 @@ POST /mcp
 }
 ```
 
-### 3. 周边 POI 搜索 (`geo_find_poi`)
+### 3. Find Nearby POIs (`geo_find_poi`)
 
-**搜索地铁站:**
+**Subway stations:**
 ```json
 {
   "name": "geo_find_poi",
   "arguments": {
-    "lat": 31.169501,
-    "lon": 121.453866,
-    "category": "subway",
-    "radius_m": 1000,
-    "limit": 5
+    "lat": 31.169501, "lon": 121.453866,
+    "category": "subway", "radius_m": 1000, "limit": 5
   }
 }
 ```
 
-**响应:**
+**Response:**
 ```json
 {
   "ok": true,
-  "center": { "lat": 31.169501, "lon": 121.453866 },
   "count": 4,
   "results": [
     { "name": "云锦路",   "distance_m": 0,   "category": "subway" },
@@ -147,7 +143,7 @@ POST /mcp
 }
 ```
 
-**搜索餐厅:**
+**Restaurants:**
 ```json
 { "lat": 31.240168, "lon": 121.497945, "category": "restaurant", "radius_m": 500 }
 ```
@@ -158,11 +154,11 @@ Win House — 387m
 Hooters — 457m | burger
 ```
 
-**支持的 POI 类型:** `restaurant`, `cafe`, `school`, `hospital`, `clinic`, `pharmacy`, `bank`, `atm`, `supermarket`, `convenience`, `subway`, `bus_stop`, `park`, `gym`, `cinema`, `library`, `kindergarten`, `police`, `fire_station`, `post_office`, `parking`, `fuel`, `marketplace`
+**Supported POI categories:** `restaurant`, `cafe`, `school`, `hospital`, `clinic`, `pharmacy`, `bank`, `atm`, `supermarket`, `convenience`, `subway`, `bus_stop`, `park`, `gym`, `cinema`, `library`, `kindergarten`, `police`, `fire_station`, `post_office`, `parking`, `fuel`, `marketplace`
 
-### 4. 路径规划 (`geo_route`)
+### 4. Route Planning (`geo_route`)
 
-**驾车:**
+**Driving:**
 ```json
 {
   "name": "geo_route",
@@ -177,7 +173,7 @@ Hooters — 457m | burger
 distance=12609m (12.6km)  duration=14.7min  confidence=high
 ```
 
-**步行（长距离自动校准）:**
+**Walking (auto-calibrated for long distances):**
 ```json
 {
   "from": { "lat": 31.075575, "lon": 121.496283 },
@@ -189,9 +185,9 @@ distance=12609m (12.6km)  duration=14.7min  confidence=high
 distance=7352m (7.4km)  duration=91.9min  confidence=low
 ```
 
-> 步行距离 >2km 时，duration 按 80m/min（~4.8km/h）重新计算，标记 `confidence=low`。
+> For walking distances >2km, duration is recalculated at 80m/min (~4.8km/h) and flagged as `confidence=low`.
 
-### 5. 健康检查
+### 5. Health Check
 
 ```json
 GET /health
@@ -204,31 +200,31 @@ GET /health
 }
 ```
 
-## 与 Search MCP 协同
+## Search MCP Integration
 
-Geo MCP 只做空间计算，不做语义搜索。典型协同流程：
+Geo MCP handles spatial computation only. For semantic search, combine with [search-mcp-worker](https://github.com/Kerry1020/search-mcp-worker):
 
 ```
-用户: "中电金信上海总部附近有什么地铁站？"
+User: "What subway stations are near 中电金信 Shanghai HQ?"
 
 1. search_mcp("中电金信上海总部地址") → "上海市徐汇区云锦路XXX号"
 2. geo_geocode("上海市徐汇区云锦路") → { lat: 31.17, lon: 121.45 }
-3. geo_find_poi(lat, lon, category="subway", radius_m=1000) → 云锦路站(0m)、龙华站(772m)
-4. geo_route(from=公司, to=云锦路站, mode="walking") → 步行3分钟
+3. geo_find_poi(lat, lon, category="subway", radius_m=1000) → 云锦路(0m), 龙华(772m)
+4. geo_route(from=office, to=云锦路, mode="walking") → 3min walk
 ```
 
-## 设计约束
+## Design Constraints
 
-- **无状态**: 禁用 CF KV，所有数据实时 API 获取
-- **零鉴权**: 全部使用公开免费 API，无需 API Key
-- **坐标精度**: 统一 `toFixed(6)` 截断
-- **步行校准**: OSRM 步行 >2km 自动按 80m/min 重算
-- **语义化错误**: `{ ok: false, reason: "poi_not_found", message: "..." }` 供 Agent 判断重试策略
+- **Stateless**: No CF KV. All data fetched from upstream APIs in real-time.
+- **Zero auth**: All upstream APIs are free and require no API key.
+- **Coordinate precision**: All coordinates truncated to 6 decimal places via `toFixed(6)`.
+- **Walking calibration**: OSRM walking durations >2km are recalculated at 80m/min.
+- **Semantic errors**: `{ ok: false, reason: "poi_not_found", message: "..." }` — agents can decide whether to retry with a larger radius or abort.
 
-## 部署
+## Deployment
 
 ```bash
-# CF Workers 直接 API 上传
+# Upload via CF API
 curl -X PUT \
   "https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/workers/scripts/geo-mcp-worker" \
   -H "X-Auth-Email: <EMAIL>" \
@@ -242,15 +238,15 @@ curl -X PUT \
 { "main_module": "index.js", "compatibility_date": "2026-04-08" }
 ```
 
-## 扩展路线
+## Expansion Roadmap
 
-详见 [GEO_TRANSIT_RESEARCH_REPORT.txt](./GEO_TRANSIT_RESEARCH_REPORT.txt)（28 个项目全量调研）。
+See [GEO_TRANSIT_RESEARCH_REPORT.txt](./GEO_TRANSIT_RESEARCH_REPORT.txt) for the full survey of 28 projects.
 
-| Layer | 方案 | 覆盖 | 状态 |
+| Layer | Solution | Coverage | Status |
 |---|---|---|---|
-| Layer 0 | OSRM + Nominatim + Overpass | 全球驾车/步行/POI | ✅ 已部署 |
-| Layer 1 | Transitous | 海外公交/地铁 | 📋 调研完成 |
-| Layer 2 | 高德 API | 中国公交/地铁 | 📋 调研完成 |
+| Layer 0 | OSRM + Nominatim + Overpass | Global driving/walking/POI | ✅ Deployed |
+| Layer 1 | Transitous | International public transit | 📋 Researched |
+| Layer 2 | Amap (高德) API | China public transit | 📋 Researched |
 
 ## License
 
