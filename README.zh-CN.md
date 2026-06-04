@@ -3,9 +3,6 @@
 Geo MCP 服务器 — 为 AI Agent 提供地理空间计算能力。
 
 部署在 Cloudflare Workers，基于 Nominatim / Overpass / OSRM，**完全免费、无需 API Key、无状态**。
-
-**在线地址**: `https://geo-mcp.qdp.qzz.io/mcp`
-
 **[English](./README.md)** | 中文
 
 ## 工具列表

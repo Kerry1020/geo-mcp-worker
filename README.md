@@ -3,9 +3,6 @@
 Geo MCP Server — Geospatial computation for AI agents.
 
 Deployed on Cloudflare Workers. Powered by Nominatim / Overpass / OSRM. **Free, no API key, stateless.**
-
-**Endpoint**: `https://geo-mcp.qdp.qzz.io/mcp`
-
 English | **[中文](./README.zh-CN.md)**
 
 ## Tools
