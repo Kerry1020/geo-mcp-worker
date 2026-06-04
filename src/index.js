@@ -129,7 +129,16 @@ async function osrmRoute(fromLat, fromLon, toLat, toLon, mode = "driving") {
   const data = await res.json();
   if (!data.routes || !data.routes.length) throw new Error("osrm: no route found");
   const r = data.routes[0];
-  return { distance_m: Math.round(r.distance), duration_min: +(r.duration / 60).toFixed(1), mode };
+  let distance_m = Math.round(r.distance);
+  let duration_min = +(r.duration / 60).toFixed(1);
+  let confidence = "high";
+  // OSRM walking mode underestimates duration for distances > 2km
+  // Recalculate using 80m/min (~4.8km/h) average human walking speed
+  if (mode === "walking" && distance_m > 2000) {
+    duration_min = +(distance_m / 80).toFixed(1);
+    confidence = "low";
+  }
+  return { distance_m, duration_min, mode, confidence };
 }
 
 // ── Tool Handlers ──
