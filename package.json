@@ -1,0 +1,7 @@
+{
+  "name": "geo-mcp-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Geo MCP Server — Geocoding, POI search, and routing via Nominatim/Overpass/OSRM",
+  "license": "GPL-3.0"
+}
