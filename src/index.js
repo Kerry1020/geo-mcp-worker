@@ -56,14 +56,14 @@ function haversineMeters(lat1, lon1, lat2, lon2) {
 
 async function nominatimSearch(query, limit = 1) {
   const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=${limit}&accept-language=zh&addressdetails=1`;
-  const res = await fetch(url, { headers: { "User-Agent": "GeoMCP/1.0" }, signal: AbortSignal.timeout(12000) });
+  const res = await fetch(url, { headers: { "User-Agent": "GeoMCP/1.0" } });
   if (!res.ok) throw new Error(`nominatim_search: ${res.status}`);
   return await res.json();
 }
 
 async function nominatimReverse(lat, lon) {
   const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=zh&addressdetails=1`;
-  const res = await fetch(url, { headers: { "User-Agent": "GeoMCP/1.0" }, signal: AbortSignal.timeout(12000) });
+  const res = await fetch(url, { headers: { "User-Agent": "GeoMCP/1.0" } });
   if (!res.ok) throw new Error(`nominatim_reverse: ${res.status}`);
   return await res.json();
 }
@@ -101,7 +101,7 @@ async function overpassPOI(lat, lon, radius = 1000, category = "restaurant", lim
     method: "POST",
     headers: { "User-Agent": "GeoMCP/1.0", "Content-Type": "application/x-www-form-urlencoded" },
     body: `data=${encodeURIComponent(query)}`,
-    signal: AbortSignal.timeout(20000),
+    
   });
   if (!res.ok) throw new Error(`overpass: ${res.status}`);
   const data = await res.json();
@@ -124,7 +124,7 @@ async function overpassPOI(lat, lon, radius = 1000, category = "restaurant", lim
 async function osrmRoute(fromLat, fromLon, toLat, toLon, mode = "driving") {
   const profile = mode === "walking" ? "foot" : mode === "cycling" ? "bike" : "car";
   const url = `https://router.project-osrm.org/route/v1/${profile}/${fromLon},${fromLat};${toLon},${toLat}?overview=false`;
-  const res = await fetch(url, { headers: { "User-Agent": "GeoMCP/1.0" }, signal: AbortSignal.timeout(15000) });
+  const res = await fetch(url, { headers: { "User-Agent": "GeoMCP/1.0" } });
   if (!res.ok) throw new Error(`osrm: ${res.status}`);
   const data = await res.json();
   if (!data.routes || !data.routes.length) throw new Error("osrm: no route found");
@@ -280,7 +280,8 @@ const TOOL_MAP = {
 // ── Request Handler ──
 
 export default {
-  async fetch(request) {
+  async fetch(request, env, ctx) {
+    try {
     if (request.method === "OPTIONS") {
       return new Response(null, {
         headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, GET, OPTIONS", "Access-Control-Allow-Headers": "Content-Type" },
@@ -355,9 +356,27 @@ export default {
       responses.push(mcpError(id, -32601, `method not found: ${msg?.method}`));
     }
 
-    if (isBatch) {
-      return json(responses.filter(Boolean));
+    if (responses.length === 0) {
+      return new Response(null, {
+        status: 202,
+        headers: { "Access-Control-Allow-Origin": "*" },
+      });
     }
-    return responses[0] || jsonRpcError(null, -32603, "empty response");
+
+    if (isBatch) {
+      const out = [];
+      for (const r of responses) {
+        out.push(r instanceof Response ? await r.clone().json() : r);
+      }
+      return json(out.filter(Boolean));
+    }
+    const first = responses[0] || { jsonrpc: "2.0", id: null, error: { code: -32603, message: "empty response" } };
+    return first instanceof Response ? first : json(first);
+  } catch(e) {
+    return new Response(JSON.stringify({error: e.message, stack: (e.stack||"").substring(0,500)}), {
+      status: 500,
+      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+    });
+  }
   },
 };
