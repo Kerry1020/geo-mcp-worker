@@ -245,6 +245,7 @@ See [GEO_TRANSIT_RESEARCH_REPORT.txt](./GEO_TRANSIT_RESEARCH_REPORT.txt) for the
 | Layer 1 | Transitous | International public transit | 📋 Researched |
 | Layer 2 | Amap (高德) API | China public transit | 📋 Researched |
 
+
 ## License
 
-GPL-3.0
+This project is licensed under the GNU General Public License v3.0 — see the [LICENSE](LICENSE) file for details.
