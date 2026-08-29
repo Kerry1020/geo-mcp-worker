@@ -11,7 +11,7 @@ English | **[中文](./README.zh-CN.md)**
 |---|---|---|
 | `geo_geocode` | Address text → lat/lon coordinates | Nominatim (OSM) |
 | `geo_reverse` | Lat/lon → address text | Nominatim (OSM) |
-| `geo_find_poi` | Nearby POI search (20+ categories) | Overpass API (OSM) |
+| `geo_find_poi` | Nearby POI search (23 categories) | Overpass API (OSM) |
 | `geo_route` | Point-to-point distance & duration (driving/walking/cycling) | OSRM |
 
 ## Protocol
@@ -85,7 +85,7 @@ POST /mcp
 → "向明中学（浦江校区）, 浦锦路, 浦锦街道, 勤俭, 闵行区, 上海市, 201112, 中国"
 ```
 
-> ⚠️ Does not accept company/brand names (e.g. "中电金信"). For such queries, use search-mcp first to get the street address, then pass it to geo_geocode.
+> ⚠ Does not accept company/brand names (e.g. "中电金信"). For such queries, use search-mcp first to get the street address, then pass it to geo_geocode.
 
 ### 2. Reverse Geocode (`geo_reverse`)
 
@@ -241,9 +241,9 @@ See [GEO_TRANSIT_RESEARCH_REPORT.txt](./GEO_TRANSIT_RESEARCH_REPORT.txt) for the
 
 | Layer | Solution | Coverage | Status |
 |---|---|---|---|
-| Layer 0 | OSRM + Nominatim + Overpass | Global driving/walking/POI | ✅ Deployed |
-| Layer 1 | Transitous | International public transit | 📋 Researched |
-| Layer 2 | Amap (高德) API | China public transit | 📋 Researched |
+| Layer 0 | OSRM + Nominatim + Overpass | Global driving/walking/POI | Deployed |
+| Layer 1 | Transitous | International public transit | Researched |
+| Layer 2 | Amap (高德) API | China public transit | Researched |
 
 
 ## License

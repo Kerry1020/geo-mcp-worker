@@ -11,7 +11,7 @@ Geo MCP 服务器 — 为 AI Agent 提供地理空间计算能力。
 |---|---|---|
 | `geo_geocode` | 地址文本 → 经纬度坐标 | Nominatim (OSM) |
 | `geo_reverse` | 经纬度坐标 → 地址文本 | Nominatim (OSM) |
-| `geo_find_poi` | 坐标周边 POI 搜索（20+ 类型） | Overpass API (OSM) |
+| `geo_find_poi` | 坐标周边 POI 搜索（23 类型） | Overpass API (OSM) |
 | `geo_route` | 点到点路径距离/时间（驾车/步行/骑行） | OSRM |
 
 ## 协议
@@ -85,7 +85,7 @@ POST /mcp
 → "向明中学（浦江校区）, 浦锦路, 浦锦街道, 勤俭, 闵行区, 上海市, 201112, 中国"
 ```
 
-> ⚠️ 不支持企业名/品牌名（如"中电金信"）。此类输入请先通过 search-mcp 获取地址，再传入 geo_geocode。
+> ⚠ 不支持企业名/品牌名（如"中电金信"）。此类输入请先通过 search-mcp 获取地址，再传入 geo_geocode。
 
 ### 2. 坐标 → 地址 (`geo_reverse`)
 
@@ -241,9 +241,9 @@ curl -X PUT \
 
 | 层级 | 方案 | 覆盖 | 状态 |
 |---|---|---|---|
-| Layer 0 | OSRM + Nominatim + Overpass | 全球驾车/步行/POI | ✅ 已部署 |
-| Layer 1 | Transitous | 海外公交/地铁 | 📋 调研完成 |
-| Layer 2 | 高德 API | 中国公交/地铁 | 📋 调研完成 |
+| Layer 0 | OSRM + Nominatim + Overpass | 全球驾车/步行/POI | 已部署 |
+| Layer 1 | Transitous | 海外公交/地铁 | 调研完成 |
+| Layer 2 | 高德 API | 中国公交/地铁 | 调研完成 |
 
 ## 许可证
 
