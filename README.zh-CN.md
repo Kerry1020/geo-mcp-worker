@@ -242,9 +242,9 @@ curl -X PUT \
 
 | 层级 | 方案 | 覆盖 | 状态 |
 |---|---|---|---|
-| Layer 0 | OSRM + Nominatim + Overpass | 全球驾车/步行/POI | 已部署 |
-| Layer 1 | Transitous | 海外公交/地铁 | 调研完成 |
-| Layer 2 | 高德 API | 中国公交/地铁 | 调研完成 |
+| Layer 0 | OSRM + Nominatim + Overpass | 全球驾车/步行/POI | ✓ 已部署 |
+| Layer 1 | Transitous | 海外公交/地铁 | 调研完成，未部署 |
+| Layer 2 | 高德 API | 中国公交/地铁 | 调研完成，未部署 |
 
 ## 许可证
 

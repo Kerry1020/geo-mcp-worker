@@ -242,9 +242,9 @@ See [GEO_TRANSIT_RESEARCH_REPORT.txt](./GEO_TRANSIT_RESEARCH_REPORT.txt) for the
 
 | Layer | Solution | Coverage | Status |
 |---|---|---|---|
-| Layer 0 | OSRM + Nominatim + Overpass | Global driving/walking/POI | Deployed |
-| Layer 1 | Transitous | International public transit | Researched |
-| Layer 2 | Amap (高德) API | China public transit | Researched |
+| Layer 0 | OSRM + Nominatim + Overpass | Global driving/walking/POI | ✓ Deployed |
+| Layer 1 | Transitous | International public transit | Researched, not deployed |
+| Layer 2 | Amap (高德) API | China public transit | Researched, not deployed |
 
 
 ## License
