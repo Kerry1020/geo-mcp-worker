@@ -192,6 +192,7 @@ GET /health
   "ok": true,
   "name": "geo-mcp-worker",
   "version": "1.0.0",
+  "build": { "sha": "<git sha>", "time": "<构建时间>" },
   "tools": ["geo_geocode", "geo_reverse", "geo_find_poi", "geo_route"],
   "data_sources": ["nominatim", "overpass", "osrm"]
 }
