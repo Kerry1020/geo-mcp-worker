@@ -1,12 +1,43 @@
 # geo-mcp-worker
 
 [![CI](https://github.com/Kerry1020/geo-mcp-worker/actions/workflows/ci.yml/badge.svg)](https://github.com/Kerry1020/geo-mcp-worker/actions/workflows/ci.yml)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
+[![MCP](https://img.shields.io/badge/MCP-Streamable%20HTTP-6E56CF)](https://modelcontextprotocol.io)
 
-Geo MCP Server — geospatial computation for AI agents.
+English | [简体中文](README.zh-CN.md)
 
-Runs on Cloudflare Workers. Powered by Nominatim / Overpass / OSRM. **Free upstreams, no API key, stateless.**
+A stateless MCP server on Cloudflare Workers for geocoding, reverse geocoding, nearby POI search and routing, powered by free OpenStreetMap services (Nominatim / Overpass / OSRM). No API key needed.
 
-English | **[中文](./README.zh-CN.md)**
+## Features
+
+- Four tools: `geo_geocode`, `geo_reverse`, `geo_find_poi`, `geo_route`
+- Free upstreams, no API key, no KV, no sessions
+- MCP over Streamable HTTP (JSON responses), protocol versions `2025-06-18`, `2025-03-26`, `2024-11-05`, JSON-RPC batches
+- Real walking and cycling profiles (FOSSGIS routers), with car routing via the OSRM demo server
+- Strict input validation; tool failures come back as structured `{ ok: false, reason }` payloads instead of protocol errors
+- Optional bearer auth (`MCP_AUTH_TOKEN`), CORS origin allow-list, per-request upstream timeouts
+- Every upstream URL can be pointed at a self-hosted instance
+- No runtime dependencies; `node:test` suite with mocked upstreams
+
+## Quick start
+
+```bash
+git clone https://github.com/Kerry1020/geo-mcp-worker.git
+cd geo-mcp-worker
+npm run dev                                   # http://localhost:8787
+curl -s http://localhost:8787/health
+```
+
+Deploy to your own account:
+
+```bash
+npx wrangler login
+npx wrangler secret put MCP_AUTH_TOKEN        # recommended for public deployments
+npm run deploy
+```
+
+Then add `https://<your-worker>.workers.dev/mcp` to your MCP client (see [MCP client config](#mcp-client-config)).
 
 ## Tools
 
@@ -55,21 +86,21 @@ An empty POI search is a success: `{ "ok": true, "count": 0, "results": [], "rea
 
 ## Configuration
 
-All configuration comes from environment variables. Defaults live in [`wrangler.toml`](./wrangler.toml) / [`src/config.js`](./src/config.js). There are **no required variables**.
+All configuration comes from environment variables. Defaults live in [`wrangler.toml`](./wrangler.toml) / [`src/config.js`](./src/config.js). Nothing is required.
 
-| Variable | Kind | Default | Purpose |
-|---|---|---|---|
-| `MCP_AUTH_TOKEN` | **secret** | unset | If set, `POST /mcp` requires `Authorization: Bearer <token>`. `/health` and preflight stay public. |
-| `ALLOWED_ORIGINS` | var | `*` | `*` or comma-separated origins. With a list, browser requests from other origins get `403`. |
-| `UPSTREAM_TIMEOUT_MS` | var | `10000` | Per-request timeout for upstream APIs (max 60000). |
-| `USER_AGENT` | var | `geo-mcp-worker/1.1 (+repo URL)` | Sent upstream. [Nominatim policy](https://operations.osmfoundation.org/policies/nominatim/) asks for an identifying UA, so put your own contact here. |
-| `ACCEPT_LANGUAGE` | var | `zh` | Language for Nominatim results. |
-| `NOMINATIM_URL` | var | `https://nominatim.openstreetmap.org` | Nominatim base URL |
-| `OVERPASS_URL` | var | `https://overpass-api.de/api/interpreter` | Overpass interpreter URL |
-| `OSRM_URL_DRIVING` | var | `https://router.project-osrm.org` | OSRM base for `driving` |
-| `OSRM_URL_WALKING` | var | `https://routing.openstreetmap.de/routed-foot` | OSRM base for `walking` |
-| `OSRM_URL_CYCLING` | var | `https://routing.openstreetmap.de/routed-bike` | OSRM base for `cycling` |
-| `BUILD_SHA`, `BUILD_TIME` | var | `unknown` | Shown in `/health` |
+| Name | Required | Secret | Default | Description |
+|---|---|---|---|---|
+| `MCP_AUTH_TOKEN` | No (recommended) | Yes | unset | If set, every request to `/mcp` requires `Authorization: Bearer <token>`. `/health` and CORS preflight stay public. |
+| `ALLOWED_ORIGINS` | No | No | `*` | `*` or a comma-separated list of origins. With a list, requests to `/mcp` carrying another `Origin` get `403`. |
+| `UPSTREAM_TIMEOUT_MS` | No | No | `10000` | Per-request timeout for upstream APIs, in ms (capped at 60000). |
+| `USER_AGENT` | No | No | `geo-mcp-worker/1.1 (+https://github.com/Kerry1020/geo-mcp-worker)` | Sent upstream. The [Nominatim policy](https://operations.osmfoundation.org/policies/nominatim/) asks for an identifying UA, so put your own contact here. |
+| `ACCEPT_LANGUAGE` | No | No | `zh` | `accept-language` sent to Nominatim. |
+| `NOMINATIM_URL` | No | No | `https://nominatim.openstreetmap.org` | Nominatim base URL. |
+| `OVERPASS_URL` | No | No | `https://overpass-api.de/api/interpreter` | Overpass interpreter URL. |
+| `OSRM_URL_DRIVING` | No | No | `https://router.project-osrm.org` | OSRM base for `driving`. |
+| `OSRM_URL_WALKING` | No | No | `https://routing.openstreetmap.de/routed-foot` | OSRM base for `walking`. |
+| `OSRM_URL_CYCLING` | No | No | `https://routing.openstreetmap.de/routed-bike` | OSRM base for `cycling`. |
+| `BUILD_SHA`, `BUILD_TIME` | No | No | `unknown` | Shown in `/health`; usually injected at deploy time. |
 
 > The public OSRM demo server (`router.project-osrm.org`) only serves the car profile: it gives car routes for `foot`/`bike` requests too. That is why walking and cycling go to the FOSSGIS routers by default.
 
@@ -79,31 +110,41 @@ For local development, put secrets in `.dev.vars` (it is git-ignored):
 MCP_AUTH_TOKEN=dev-token
 ```
 
-## MCP client configuration
+## MCP client config
 
-Claude Desktop / Cursor and other clients that only speak stdio can use [`mcp-remote`](https://www.npmjs.com/package/mcp-remote):
+Claude Code (native Streamable HTTP):
+
+```bash
+claude mcp add --transport http geo https://<your-worker>.workers.dev/mcp
+
+# with MCP_AUTH_TOKEN set on the worker
+claude mcp add --transport http geo https://<your-worker>.workers.dev/mcp \
+  --header "Authorization: Bearer <token>"
+```
+
+Claude Desktop, Cursor and other stdio-only clients via [`mcp-remote`](https://www.npmjs.com/package/mcp-remote):
 
 ```json
 {
   "mcpServers": {
     "geo": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "https://<your-worker>.workers.dev/mcp",
-               "--header", "Authorization:${AUTH_HEADER}"],
-      "env": { "AUTH_HEADER": "Bearer <token>" }
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://<your-worker>.workers.dev/mcp",
+        "--header",
+        "Authorization: Bearer ${AUTH_TOKEN}"
+      ],
+      "env": {
+        "AUTH_TOKEN": "<token>"
+      }
     }
   }
 }
 ```
 
-Clients with native Streamable HTTP support (for example Claude Code):
-
-```bash
-claude mcp add --transport http geo https://<your-worker>.workers.dev/mcp \
-  --header "Authorization: Bearer <token>"
-```
-
-Leave out the `Authorization` header if `MCP_AUTH_TOKEN` is not set.
+Drop the `--header` arguments and `env` block if `MCP_AUTH_TOKEN` is not set.
 
 ## curl examples
 
@@ -235,6 +276,14 @@ User: "What subway stations are near 中电金信 Shanghai HQ?"
 4. geo_route(from=office, to=云锦路, mode="walking") → 3 min walk
 ```
 
+## Security notes
+
+- Without `MCP_AUTH_TOKEN`, `/mcp` is open to anyone who knows the URL, and they can spend your Workers quota and the fair-use budget of the public upstreams. For any public deployment, set a token: `npx wrangler secret put MCP_AUTH_TOKEN`. The token is compared in constant time.
+- `/`, `/health`, `/healthz` and `OPTIONS` preflight are always unauthenticated. They return only name, version, build info and the tool list.
+- `ALLOWED_ORIGINS` limits browser origins (requests with a non-listed `Origin` get `403`). It is not a substitute for the token: non-browser clients can omit `Origin`.
+- Request bodies over 1 MB are rejected, and internal errors never return stack traces.
+- Tool inputs (addresses, coordinates) are sent to the configured upstreams (by default OSM community services). Do not send data you would not share with them.
+
 ## Development
 
 Requires Node.js ≥ 20. There are no runtime dependencies.
@@ -258,7 +307,7 @@ src/util.js       Validation and geometry helpers
 test/             node:test suites with a mocked global fetch
 ```
 
-## Deployment
+## Deploy
 
 ```bash
 npx wrangler login
@@ -284,6 +333,16 @@ See [docs/GEO_TRANSIT_RESEARCH_REPORT.md](./docs/GEO_TRANSIT_RESEARCH_REPORT.md)
 | Layer 1 | Transitous | International public transit | Researched, not deployed |
 | Layer 2 | Amap (高德) API | China public transit | Researched, not deployed |
 
+## Related projects
+
+- [time-mcp-worker](https://github.com/Kerry1020/time-mcp-worker) — time zone lookup, conversion and time differences
+- [memory-mcp-worker](https://github.com/Kerry1020/memory-mcp-worker) — persistent KV-backed memory for agents
+- [webhook-inbox-mcp-worker](https://github.com/Kerry1020/webhook-inbox-mcp-worker) — receive webhooks into KV and read them as MCP tools
+- [summarize-mcp-worker](https://github.com/Kerry1020/summarize-mcp-worker) — web page extraction and extractive summarization
+- [image-mcp-worker](https://github.com/Kerry1020/image-mcp-worker) — image generation via any OpenAI-compatible images API
+- [calc-mcp-worker](https://github.com/Kerry1020/calc-mcp-worker) — math: expressions, calculus, matrices, statistics
+- [search-mcp-worker](https://github.com/Kerry1020/search-mcp-worker) — multi-engine web search with open, auditable ranking
+
 ## License
 
-This project is licensed under the GNU General Public License v3.0. See the [LICENSE](LICENSE) file for details.
+Licensed under the [GNU General Public License v3.0](LICENSE).

@@ -1,12 +1,43 @@
 # geo-mcp-worker
 
 [![CI](https://github.com/Kerry1020/geo-mcp-worker/actions/workflows/ci.yml/badge.svg)](https://github.com/Kerry1020/geo-mcp-worker/actions/workflows/ci.yml)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
+[![MCP](https://img.shields.io/badge/MCP-Streamable%20HTTP-6E56CF)](https://modelcontextprotocol.io)
 
-Geo MCP 服务器 — 为 AI Agent 提供地理空间计算能力。
+[English](README.md) | 简体中文
 
-部署在 Cloudflare Workers，基于 Nominatim / Overpass / OSRM，**上游免费、无需 API Key、无状态**。
+运行在 Cloudflare Workers 上的无状态 MCP 服务器，提供地理编码、逆地理编码、周边 POI 搜索和路线规划，数据来自免费的 OpenStreetMap 服务（Nominatim / Overpass / OSRM），无需 API Key。
 
-**[English](./README.md)** | 中文
+## 功能特性
+
+- 四个工具：`geo_geocode`、`geo_reverse`、`geo_find_poi`、`geo_route`
+- 上游免费，无需 API Key；不用 KV，也没有会话状态
+- 基于 Streamable HTTP 的 MCP（只返回 JSON），支持协议版本 `2025-06-18`、`2025-03-26`、`2024-11-05`，支持 JSON-RPC 批量请求
+- 步行、骑行走 FOSSGIS 的真实路由 profile，驾车走 OSRM 演示服务器
+- 参数校验严格；工具失败时返回结构化的 `{ ok: false, reason }`，而不是协议错误
+- 可选 Bearer 鉴权（`MCP_AUTH_TOKEN`）、CORS Origin 白名单、上游请求超时
+- 所有上游地址都可以换成自建实例
+- 无运行时依赖；`node:test` 测试套件，上游全部 mock
+
+## 快速开始
+
+```bash
+git clone https://github.com/Kerry1020/geo-mcp-worker.git
+cd geo-mcp-worker
+npm run dev                                   # http://localhost:8787
+curl -s http://localhost:8787/health
+```
+
+部署到自己的账号：
+
+```bash
+npx wrangler login
+npx wrangler secret put MCP_AUTH_TOKEN        # 公开部署时建议设置
+npm run deploy
+```
+
+然后在 MCP 客户端里添加 `https://<your-worker>.workers.dev/mcp`（见下文 [MCP 客户端配置](#mcp-客户端配置)）。
 
 ## 工具列表
 
@@ -55,21 +86,21 @@ POI 搜索结果为空算成功：`{ "ok": true, "count": 0, "results": [], "rea
 
 ## 配置
 
-所有配置都来自环境变量，默认值见 [`wrangler.toml`](./wrangler.toml) 和 [`src/config.js`](./src/config.js)。**没有必填变量。**
+所有配置都来自环境变量，默认值见 [`wrangler.toml`](./wrangler.toml) 和 [`src/config.js`](./src/config.js)。**没有必填项。**
 
-| 变量 | 类型 | 默认值 | 用途 |
-|---|---|---|---|
-| `MCP_AUTH_TOKEN` | **secret** | 不设置 | 设置后，`POST /mcp` 需要 `Authorization: Bearer <token>`。`/health` 和预检请求仍然公开。 |
-| `ALLOWED_ORIGINS` | var | `*` | `*` 或逗号分隔的 Origin 列表。设为列表时，来自其他 Origin 的浏览器请求返回 `403`。 |
-| `UPSTREAM_TIMEOUT_MS` | var | `10000` | 每个上游请求的超时（最大 60000）。 |
-| `USER_AGENT` | var | `geo-mcp-worker/1.1 (+仓库地址)` | 发给上游的 UA。[Nominatim 使用政策](https://operations.osmfoundation.org/policies/nominatim/)要求可识别的 UA，请填上你自己的联系方式。 |
-| `ACCEPT_LANGUAGE` | var | `zh` | Nominatim 返回结果的语言 |
-| `NOMINATIM_URL` | var | `https://nominatim.openstreetmap.org` | Nominatim 地址 |
-| `OVERPASS_URL` | var | `https://overpass-api.de/api/interpreter` | Overpass 地址 |
-| `OSRM_URL_DRIVING` | var | `https://router.project-osrm.org` | `driving` 使用的 OSRM |
-| `OSRM_URL_WALKING` | var | `https://routing.openstreetmap.de/routed-foot` | `walking` 使用的 OSRM |
-| `OSRM_URL_CYCLING` | var | `https://routing.openstreetmap.de/routed-bike` | `cycling` 使用的 OSRM |
-| `BUILD_SHA`、`BUILD_TIME` | var | `unknown` | 在 `/health` 中显示 |
+| 名称 | 必填 | Secret | 默认值 | 说明 |
+|---|---|---|---|---|
+| `MCP_AUTH_TOKEN` | 否（建议设置） | 是 | 不设置 | 设置后，所有 `/mcp` 请求都需要 `Authorization: Bearer <token>`。`/health` 和 CORS 预检仍然公开。 |
+| `ALLOWED_ORIGINS` | 否 | 否 | `*` | `*` 或逗号分隔的 Origin 列表。设为列表时，带其他 `Origin` 的 `/mcp` 请求返回 `403`。 |
+| `UPSTREAM_TIMEOUT_MS` | 否 | 否 | `10000` | 每个上游请求的超时，单位毫秒（上限 60000）。 |
+| `USER_AGENT` | 否 | 否 | `geo-mcp-worker/1.1 (+https://github.com/Kerry1020/geo-mcp-worker)` | 发给上游的 UA。[Nominatim 使用政策](https://operations.osmfoundation.org/policies/nominatim/)要求可识别的 UA，请填上你自己的联系方式。 |
+| `ACCEPT_LANGUAGE` | 否 | 否 | `zh` | 发给 Nominatim 的 `accept-language`。 |
+| `NOMINATIM_URL` | 否 | 否 | `https://nominatim.openstreetmap.org` | Nominatim 地址。 |
+| `OVERPASS_URL` | 否 | 否 | `https://overpass-api.de/api/interpreter` | Overpass 地址。 |
+| `OSRM_URL_DRIVING` | 否 | 否 | `https://router.project-osrm.org` | `driving` 使用的 OSRM。 |
+| `OSRM_URL_WALKING` | 否 | 否 | `https://routing.openstreetmap.de/routed-foot` | `walking` 使用的 OSRM。 |
+| `OSRM_URL_CYCLING` | 否 | 否 | `https://routing.openstreetmap.de/routed-bike` | `cycling` 使用的 OSRM。 |
+| `BUILD_SHA`、`BUILD_TIME` | 否 | 否 | `unknown` | 在 `/health` 中显示，一般在部署时注入。 |
 
 > OSRM 公共演示服务器（`router.project-osrm.org`）只提供驾车 profile：`foot`/`bike` 请求返回的也是驾车路线。所以步行和骑行默认改用 FOSSGIS 的路由服务。
 
@@ -81,29 +112,39 @@ MCP_AUTH_TOKEN=dev-token
 
 ## MCP 客户端配置
 
-Claude Desktop / Cursor 等只支持 stdio 的客户端，可以通过 [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) 接入：
+Claude Code（原生支持 Streamable HTTP）：
+
+```bash
+claude mcp add --transport http geo https://<your-worker>.workers.dev/mcp
+
+# Worker 设置了 MCP_AUTH_TOKEN 时
+claude mcp add --transport http geo https://<your-worker>.workers.dev/mcp \
+  --header "Authorization: Bearer <token>"
+```
+
+Claude Desktop、Cursor 等只支持 stdio 的客户端，通过 [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) 接入：
 
 ```json
 {
   "mcpServers": {
     "geo": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "https://<your-worker>.workers.dev/mcp",
-               "--header", "Authorization:${AUTH_HEADER}"],
-      "env": { "AUTH_HEADER": "Bearer <token>" }
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://<your-worker>.workers.dev/mcp",
+        "--header",
+        "Authorization: Bearer ${AUTH_TOKEN}"
+      ],
+      "env": {
+        "AUTH_TOKEN": "<token>"
+      }
     }
   }
 }
 ```
 
-原生支持 Streamable HTTP 的客户端（例如 Claude Code）：
-
-```bash
-claude mcp add --transport http geo https://<your-worker>.workers.dev/mcp \
-  --header "Authorization: Bearer <token>"
-```
-
-没有设置 `MCP_AUTH_TOKEN` 时，去掉 `Authorization` 头即可。
+没有设置 `MCP_AUTH_TOKEN` 时，去掉 `--header` 两个参数和 `env` 即可。
 
 ## curl 示例
 
@@ -235,6 +276,14 @@ Geo MCP 只做空间计算，不做语义搜索。可以与 [search-mcp-worker](
 4. geo_route(from=公司, to=云锦路站, mode="walking") → 步行 3 分钟
 ```
 
+## 安全说明
+
+- 不设置 `MCP_AUTH_TOKEN` 时，任何知道地址的人都能调用 `/mcp`，消耗你的 Workers 额度和公共上游的使用配额。公开部署请务必设置：`npx wrangler secret put MCP_AUTH_TOKEN`。Token 比较采用常量时间。
+- `/`、`/health`、`/healthz` 和 `OPTIONS` 预检始终无需鉴权，只返回名称、版本、构建信息和工具列表。
+- `ALLOWED_ORIGINS` 只限制浏览器来源（带非白名单 `Origin` 的请求返回 `403`），不能代替 Token：非浏览器客户端完全可以不带 `Origin`。
+- 超过 1 MB 的请求体会被拒绝；内部错误不会返回堆栈。
+- 工具输入（地址、坐标）会发送给配置的上游（默认是 OSM 社区服务），不想让对方看到的数据就别传。
+
 ## 开发
 
 需要 Node.js ≥ 20，没有运行时依赖。
@@ -284,6 +333,16 @@ CI 或非交互式部署请使用有权限范围的 Cloudflare API Token（环�
 | Layer 1 | Transitous | 海外公交/地铁 | 调研完成，未部署 |
 | Layer 2 | 高德 API | 中国公交/地铁 | 调研完成，未部署 |
 
+## 相关项目
+
+- [time-mcp-worker](https://github.com/Kerry1020/time-mcp-worker) — 时区查询、时间换算与时间差计算
+- [memory-mcp-worker](https://github.com/Kerry1020/memory-mcp-worker) — 基于 KV 的 Agent 持久化记忆
+- [webhook-inbox-mcp-worker](https://github.com/Kerry1020/webhook-inbox-mcp-worker) — 把 Webhook 收进 KV，再通过 MCP 工具读取
+- [summarize-mcp-worker](https://github.com/Kerry1020/summarize-mcp-worker) — 网页正文提取与抽取式摘要
+- [image-mcp-worker](https://github.com/Kerry1020/image-mcp-worker) — 对接任意 OpenAI 兼容图像接口生成图片
+- [calc-mcp-worker](https://github.com/Kerry1020/calc-mcp-worker) — 数学计算：表达式、微积分、矩阵、统计
+- [search-mcp-worker](https://github.com/Kerry1020/search-mcp-worker) — 多引擎网页搜索，排序逻辑公开可审计
+
 ## 许可证
 
-本项目采用 GNU General Public License v3.0 许可证，详见 [LICENSE](LICENSE)。
+本项目采用 [GNU General Public License v3.0](LICENSE) 许可证。
