@@ -14,24 +14,35 @@ export class UpstreamError extends Error {
 }
 
 export async function fetchJson(source, url, init, cfg) {
-  let res;
+  // AbortController + setTimeout rather than AbortSignal.timeout(): the latter's timer
+  // does not keep the Node event loop alive, which cancels pending tests on Node 22.
+  const controller = new AbortController();
+  const timer = setTimeout(
+    () => controller.abort(new DOMException("upstream timeout", "TimeoutError")),
+    cfg.timeoutMs,
+  );
   try {
-    res = await fetch(url, {
-      ...init,
-      headers: { "User-Agent": cfg.userAgent, Accept: "application/json", ...(init && init.headers) },
-      signal: AbortSignal.timeout(cfg.timeoutMs),
-    });
-  } catch (e) {
-    if (e && (e.name === "TimeoutError" || e.name === "AbortError")) {
-      throw new UpstreamError(source, `timeout after ${cfg.timeoutMs}ms`, { timeout: true });
+    let res;
+    try {
+      res = await fetch(url, {
+        ...init,
+        headers: { "User-Agent": cfg.userAgent, Accept: "application/json", ...(init && init.headers) },
+        signal: controller.signal,
+      });
+    } catch (e) {
+      if (e && (e.name === "TimeoutError" || e.name === "AbortError")) {
+        throw new UpstreamError(source, `timeout after ${cfg.timeoutMs}ms`, { timeout: true });
+      }
+      throw new UpstreamError(source, `network error: ${e && e.message ? e.message : String(e)}`);
     }
-    throw new UpstreamError(source, `network error: ${e && e.message ? e.message : String(e)}`);
-  }
-  if (!res.ok) throw new UpstreamError(source, String(res.status), { status: res.status });
-  try {
-    return await res.json();
-  } catch {
-    throw new UpstreamError(source, "invalid JSON response", { status: res.status });
+    if (!res.ok) throw new UpstreamError(source, String(res.status), { status: res.status });
+    try {
+      return await res.json();
+    } catch {
+      throw new UpstreamError(source, "invalid JSON response", { status: res.status });
+    }
+  } finally {
+    clearTimeout(timer);
   }
 }
 
