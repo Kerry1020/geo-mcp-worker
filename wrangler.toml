@@ -1,0 +1,32 @@
+# Cloudflare Workers config for geo-mcp-worker.
+# No secrets belong in this file. Set secrets with:
+#   npx wrangler secret put MCP_AUTH_TOKEN
+name = "geo-mcp-worker"
+main = "src/index.js"
+compatibility_date = "2026-04-08"
+
+# Non-secret configuration. All values are optional; defaults are shown.
+[vars]
+# Timeout for each upstream (Nominatim / Overpass / OSRM) request, in ms (max 60000).
+UPSTREAM_TIMEOUT_MS = "10000"
+# Nominatim's usage policy requires an identifying User-Agent. Put a contact
+# URL or email of the operator here for your own deployment.
+USER_AGENT = "geo-mcp-worker/1.1 (+https://github.com/Kerry1020/geo-mcp-worker)"
+# accept-language sent to Nominatim.
+ACCEPT_LANGUAGE = "zh"
+# CORS: "*" or a comma-separated list of allowed origins. When a list is set,
+# requests to /mcp carrying a non-listed Origin header are rejected with 403.
+ALLOWED_ORIGINS = "*"
+# Upstream endpoints (override to point at self-hosted instances).
+# NOMINATIM_URL = "https://nominatim.openstreetmap.org"
+# OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+# OSRM_URL_DRIVING = "https://router.project-osrm.org"
+# OSRM_URL_WALKING = "https://routing.openstreetmap.de/routed-foot"
+# OSRM_URL_CYCLING = "https://routing.openstreetmap.de/routed-bike"
+# Shown by /health. Usually injected at deploy time:
+#   npx wrangler deploy --var BUILD_SHA:$(git rev-parse --short HEAD) --var BUILD_TIME:$(date -u +%FT%TZ)
+# BUILD_SHA = "unknown"
+# BUILD_TIME = "unknown"
+
+# Secrets (optional) — set via `wrangler secret put`, never here:
+#   MCP_AUTH_TOKEN  If set, POST /mcp requires `Authorization: Bearer <token>`.
