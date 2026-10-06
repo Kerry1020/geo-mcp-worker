@@ -1,67 +1,144 @@
 # geo-mcp-worker
 
-Geo MCP Server — Geospatial computation for AI agents.
+[![CI](https://github.com/Kerry1020/geo-mcp-worker/actions/workflows/ci.yml/badge.svg)](https://github.com/Kerry1020/geo-mcp-worker/actions/workflows/ci.yml)
 
-Deployed on Cloudflare Workers. Powered by Nominatim / Overpass / OSRM. **Free, no API key, stateless.**
+Geo MCP Server — geospatial computation for AI agents.
+
+Runs on Cloudflare Workers. Powered by Nominatim / Overpass / OSRM. **Free upstreams, no API key, stateless.**
+
 English | **[中文](./README.zh-CN.md)**
 
 ## Tools
 
-| Tool | Description | Source |
-|---|---|---|
-| `geo_geocode` | Address text → lat/lon coordinates | Nominatim (OSM) |
-| `geo_reverse` | Lat/lon → address text | Nominatim (OSM) |
-| `geo_find_poi` | Nearby POI search (23 categories) | Overpass API (OSM) |
-| `geo_route` | Point-to-point distance & duration (driving/walking/cycling) | OSRM |
+| Tool | Description | Arguments | Source |
+|---|---|---|---|
+| `geo_geocode` | Address text → lat/lon | `address` (string, required, ≤500 chars), `limit` (1–10, default 1) | Nominatim (OSM) |
+| `geo_reverse` | Lat/lon → address | `lat` (−90..90, required), `lon` (−180..180, required) | Nominatim (OSM) |
+| `geo_find_poi` | Nearby POIs, sorted by distance | `lat`, `lon` (required), `radius_m` (1–5000, default 1000), `category` (default `restaurant`), `limit` (1–50, default 20) | Overpass API (OSM) |
+| `geo_route` | Point-to-point distance & duration | `from` `{lat, lon}`, `to` `{lat, lon}` (required), `mode` `driving` \| `walking` \| `cycling` (default `driving`) | OSRM |
 
-## Protocol
+**POI categories:** `restaurant`, `cafe`, `school`, `hospital`, `clinic`, `pharmacy`, `bank`, `atm`, `supermarket`, `convenience`, `subway`, `bus_stop`, `park`, `gym`, `cinema`, `library`, `kindergarten`, `police`, `fire_station`, `post_office`, `parking`, `fuel`, `marketplace`. Any other lowercase `[a-z0-9_]` value is queried as `amenity=<value>`.
 
-MCP (JSON-RPC 2.0), compatible with [search-mcp-worker](https://github.com/Kerry1020/search-mcp-worker).
+Coordinates may be numbers or numeric strings. Out-of-range or non-numeric coordinates are rejected with `reason: "invalid_coords"` (they are not silently clamped).
 
-- `POST /mcp` — MCP endpoint
-- `GET /health` — Health check
+## Endpoints & protocol
 
-## Quick Start
+- `POST /mcp` — MCP endpoint (JSON-RPC 2.0 over Streamable HTTP, JSON responses only, no SSE)
+- `GET /health` (also `/`, `/healthz`) — health check, always public
+- `OPTIONS *` — CORS preflight
 
-### Initialize
+Supported methods: `initialize`, `ping`, `tools/list`, `tools/call`. Notifications (messages without `id`, e.g. `notifications/initialized`) are accepted with `202 Accepted` and no body. JSON-RPC batches are supported.
+
+Protocol versions: `2025-06-18`, `2025-03-26`, `2024-11-05` (the client's version is echoed if supported, otherwise `2025-06-18`).
+
+### Errors
+
+Protocol errors use standard JSON-RPC codes:
+
+| Code | When |
+|---|---|
+| `-32700` | Body is not valid JSON |
+| `-32600` | Invalid request (missing `jsonrpc: "2.0"`/`method`, empty batch, unauthorized, forbidden origin, body > 1 MB) |
+| `-32601` | Unknown method |
+| `-32602` | Unknown tool name, or `arguments` is not an object |
+| `-32603` | Unexpected internal error (no stack trace is returned) |
+
+Tool-level failures are **not** JSON-RPC errors. They come back as a normal result with `isError: true` and a semantic payload in `structuredContent` (and as JSON text in `content[0].text`):
 
 ```json
-POST /mcp
+{ "ok": false, "reason": "invalid_coords", "message": "..." }
+```
+
+`reason` values: `missing_address`, `invalid_address`, `missing_coords`, `invalid_coords`, `missing_points`, `invalid_category`, `invalid_mode`, `not_found`, `upstream_timeout`, `geocode_error`, `reverse_error`, `poi_error`, `route_error`, `internal_error`.
+
+An empty POI search is a success: `{ "ok": true, "count": 0, "results": [], "reason": "poi_not_found", ... }`, so an agent can retry with a larger radius.
+
+## Configuration
+
+All configuration comes from environment variables. Defaults live in [`wrangler.toml`](./wrangler.toml) / [`src/config.js`](./src/config.js). There are **no required variables**.
+
+| Variable | Kind | Default | Purpose |
+|---|---|---|---|
+| `MCP_AUTH_TOKEN` | **secret** | unset | If set, `POST /mcp` requires `Authorization: Bearer <token>`. `/health` and preflight stay public. |
+| `ALLOWED_ORIGINS` | var | `*` | `*` or comma-separated origins. With a list, browser requests from other origins get `403`. |
+| `UPSTREAM_TIMEOUT_MS` | var | `10000` | Per-request timeout for upstream APIs (max 60000). |
+| `USER_AGENT` | var | `geo-mcp-worker/1.1 (+repo URL)` | Sent upstream. [Nominatim policy](https://operations.osmfoundation.org/policies/nominatim/) asks for an identifying UA, so put your own contact here. |
+| `ACCEPT_LANGUAGE` | var | `zh` | Language for Nominatim results. |
+| `NOMINATIM_URL` | var | `https://nominatim.openstreetmap.org` | Nominatim base URL |
+| `OVERPASS_URL` | var | `https://overpass-api.de/api/interpreter` | Overpass interpreter URL |
+| `OSRM_URL_DRIVING` | var | `https://router.project-osrm.org` | OSRM base for `driving` |
+| `OSRM_URL_WALKING` | var | `https://routing.openstreetmap.de/routed-foot` | OSRM base for `walking` |
+| `OSRM_URL_CYCLING` | var | `https://routing.openstreetmap.de/routed-bike` | OSRM base for `cycling` |
+| `BUILD_SHA`, `BUILD_TIME` | var | `unknown` | Shown in `/health` |
+
+> The public OSRM demo server (`router.project-osrm.org`) only serves the car profile: it gives car routes for `foot`/`bike` requests too. That is why walking and cycling go to the FOSSGIS routers by default.
+
+For local development, put secrets in `.dev.vars` (it is git-ignored):
+
+```
+MCP_AUTH_TOKEN=dev-token
+```
+
+## MCP client configuration
+
+Claude Desktop / Cursor and other clients that only speak stdio can use [`mcp-remote`](https://www.npmjs.com/package/mcp-remote):
+
+```json
 {
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "initialize",
-  "params": {
-    "protocolVersion": "2025-03-26",
-    "capabilities": {},
-    "clientInfo": { "name": "my-agent", "version": "1.0" }
+  "mcpServers": {
+    "geo": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://<your-worker>.workers.dev/mcp",
+               "--header", "Authorization:${AUTH_HEADER}"],
+      "env": { "AUTH_HEADER": "Bearer <token>" }
+    }
   }
 }
 ```
 
-### List tools
+Clients with native Streamable HTTP support (for example Claude Code):
 
-```json
-{ "jsonrpc": "2.0", "id": 2, "method": "tools/list" }
+```bash
+claude mcp add --transport http geo https://<your-worker>.workers.dev/mcp \
+  --header "Authorization: Bearer <token>"
 ```
 
-## Live API Examples
+Leave out the `Authorization` header if `MCP_AUTH_TOKEN` is not set.
 
-### 1. Geocode (`geo_geocode`)
+## curl examples
 
-**Request:**
-```json
-{
-  "jsonrpc": "2.0", "id": 1,
-  "method": "tools/call",
-  "params": {
-    "name": "geo_geocode",
-    "arguments": { "address": "上海市徐汇区云锦路", "limit": 1 }
-  }
-}
+```bash
+URL=https://<your-worker>.workers.dev   # or http://localhost:8787 with `npm run dev`
+AUTH="Authorization: Bearer $GEO_MCP_TOKEN"   # only needed when MCP_AUTH_TOKEN is set
+
+curl -s $URL/health
+
+curl -s $URL/mcp -H "$AUTH" -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"1"}}}'
+
+curl -s $URL/mcp -H "$AUTH" -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+
+curl -s $URL/mcp -H "$AUTH" -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"geo_geocode","arguments":{"address":"上海市徐汇区云锦路"}}}'
+
+curl -s $URL/mcp -H "$AUTH" -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"geo_find_poi","arguments":{"lat":31.169501,"lon":121.453866,"category":"subway","radius_m":1000,"limit":5}}}'
+
+curl -s $URL/mcp -H "$AUTH" -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"geo_route","arguments":{"from":{"lat":31.169501,"lon":121.453866},"to":{"lat":31.240168,"lon":121.497945},"mode":"driving"}}}'
 ```
 
-**Response:**
+## Example results
+
+These were captured from a live deployment. Exact values change as OSM data changes.
+
+### `geo_geocode`
+
+```json
+{ "address": "上海市徐汇区云锦路", "limit": 1 }
+```
+
 ```json
 {
   "ok": true,
@@ -78,129 +155,76 @@ POST /mcp
 }
 ```
 
-**School names work too:**
+School names work too: `{ "address": "向明中学浦江校区" }` → `lat=31.075575, lon=121.496283`.
+
+> ⚠ Company and brand names (e.g. "中电金信") are not accepted. For those, use search-mcp first to get the street address, then pass the address to `geo_geocode`.
+
+### `geo_reverse`
+
 ```json
-{ "address": "向明中学浦江校区" }
-→ lat=31.075575, lon=121.496283
-→ "向明中学（浦江校区）, 浦锦路, 浦锦街道, 勤俭, 闵行区, 上海市, 201112, 中国"
+{ "lat": 31.169501, "lon": 121.453866 }
 ```
 
-> ⚠ Does not accept company/brand names (e.g. "中电金信"). For such queries, use search-mcp first to get the street address, then pass it to geo_geocode.
-
-### 2. Reverse Geocode (`geo_reverse`)
-
-**Request:**
-```json
-{
-  "name": "geo_reverse",
-  "arguments": { "lat": 31.169501, "lon": 121.453866 }
-}
-```
-
-**Response:**
 ```json
 {
   "ok": true,
+  "lat": 31.169501,
+  "lon": 121.453866,
   "display_name": "云锦路, 龙华, 龙华街道, 徐汇区, 上海市, 200232, 中国",
-  "address": {
-    "road": "云锦路",
-    "suburb": "龙华街道",
-    "city": "徐汇区",
-    "state": "上海市",
-    "postcode": "200232",
-    "country": "中国"
-  }
+  "address": { "road": "云锦路", "suburb": "龙华街道", "city": "徐汇区", "state": "上海市", "postcode": "200232", "country": "中国" }
 }
 ```
 
-### 3. Find Nearby POIs (`geo_find_poi`)
+### `geo_find_poi`
 
-**Subway stations:**
 ```json
-{
-  "name": "geo_find_poi",
-  "arguments": {
-    "lat": 31.169501, "lon": 121.453866,
-    "category": "subway", "radius_m": 1000, "limit": 5
-  }
-}
+{ "lat": 31.169501, "lon": 121.453866, "category": "subway", "radius_m": 1000, "limit": 5 }
 ```
 
-**Response:**
 ```json
 {
   "ok": true,
+  "center": { "lat": 31.169501, "lon": 121.453866 },
   "count": 4,
   "results": [
-    { "name": "云锦路",   "distance_m": 0,   "category": "subway" },
-    { "name": "龙华",     "distance_m": 772, "category": "subway" },
-    { "name": "龙耀路",   "distance_m": 897, "category": "subway" },
-    { "name": "龙华",     "distance_m": 962, "category": "subway" }
+    { "name": "云锦路", "distance_m": 0,   "category": "subway" },
+    { "name": "龙华",   "distance_m": 772, "category": "subway" },
+    { "name": "龙耀路", "distance_m": 897, "category": "subway" },
+    { "name": "龙华",   "distance_m": 962, "category": "subway" }
   ]
 }
 ```
 
-**Restaurants:**
-```json
-{ "lat": 31.240168, "lon": 121.497945, "category": "restaurant", "radius_m": 500 }
-```
-```
-Yang's Dumplings — 223m
-Morton's Grille — 319m | steak_house
-Win House — 387m
-Hooters — 457m | burger
-```
+Each result also carries `lat`, `lon` and `tags` (`cuisine`, `opening_hours`, `phone`, `website`, `operator`, when available).
 
-**Supported POI categories:** `restaurant`, `cafe`, `school`, `hospital`, `clinic`, `pharmacy`, `bank`, `atm`, `supermarket`, `convenience`, `subway`, `bus_stop`, `park`, `gym`, `cinema`, `library`, `kindergarten`, `police`, `fire_station`, `post_office`, `parking`, `fuel`, `marketplace`
-
-### 4. Route Planning (`geo_route`)
-
-**Driving:**
-```json
-{
-  "name": "geo_route",
-  "arguments": {
-    "from": { "lat": 31.169501, "lon": 121.453866 },
-    "to":   { "lat": 31.240168, "lon": 121.497945 },
-    "mode": "driving"
-  }
-}
-```
-```
-distance=12609m (12.6km)  duration=14.7min  confidence=high
-```
-
-**Walking (auto-calibrated for long distances):**
-```json
-{
-  "from": { "lat": 31.075575, "lon": 121.496283 },
-  "to":   { "lat": 31.127125, "lon": 121.489319 },
-  "mode": "walking"
-}
-```
-```
-distance=7352m (7.4km)  duration=91.9min  confidence=low
-```
-
-> For walking distances >2km, duration is recalculated at 80m/min (~4.8km/h) and flagged as `confidence=low`.
-
-### 5. Health Check
+### `geo_route`
 
 ```json
-GET /health
+{ "from": { "lat": 31.169501, "lon": 121.453866 }, "to": { "lat": 31.240168, "lon": 121.497945 }, "mode": "driving" }
+```
+
+```json
+{ "ok": true, "from": { ... }, "to": { ... }, "distance_m": 12609, "duration_min": 14.7, "mode": "driving", "confidence": "high" }
+```
+
+> For walking routes longer than 2 km, `duration_min` is recalculated at 80 m/min (~4.8 km/h) and flagged `confidence: "low"`.
+
+### Health
+
+```json
 {
   "ok": true,
   "name": "geo-mcp-worker",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "build": { "sha": "<git sha>", "time": "<build time>" },
   "tools": ["geo_geocode", "geo_reverse", "geo_find_poi", "geo_route"],
   "data_sources": ["nominatim", "overpass", "osrm"]
 }
 ```
 
-## Search MCP Integration
+## Search MCP integration
 
-Geo MCP handles spatial computation only. For semantic search, combine with [search-mcp-worker](https://github.com/Kerry1020/search-mcp-worker):
+Geo MCP does spatial computation only. For semantic search, pair it with [search-mcp-worker](https://github.com/Kerry1020/search-mcp-worker):
 
 ```
 User: "What subway stations are near 中电金信 Shanghai HQ?"
@@ -208,37 +232,51 @@ User: "What subway stations are near 中电金信 Shanghai HQ?"
 1. search_mcp("中电金信上海总部地址") → "上海市徐汇区云锦路XXX号"
 2. geo_geocode("上海市徐汇区云锦路") → { lat: 31.17, lon: 121.45 }
 3. geo_find_poi(lat, lon, category="subway", radius_m=1000) → 云锦路(0m), 龙华(772m)
-4. geo_route(from=office, to=云锦路, mode="walking") → 3min walk
+4. geo_route(from=office, to=云锦路, mode="walking") → 3 min walk
 ```
 
-## Design Constraints
+## Development
 
-- **Stateless**: No CF KV. All data fetched from upstream APIs in real-time.
-- **Zero auth**: All upstream APIs are free and require no API key.
-- **Coordinate precision**: All coordinates truncated to 6 decimal places via `toFixed(6)`.
-- **Walking calibration**: OSRM walking durations >2km are recalculated at 80m/min.
-- **Semantic errors**: `{ ok: false, reason: "poi_not_found", message: "..." }` — agents can decide whether to retry with a larger radius or abort.
+Requires Node.js ≥ 20. There are no runtime dependencies.
+
+```bash
+npm test          # node:test suite; upstream APIs are mocked, no network needed
+npm run check     # syntax / import check
+npm run dev       # local server via wrangler (http://localhost:8787)
+```
+
+Layout:
+
+```
+src/index.js      Worker entry: routing, CORS, auth, body parsing
+src/protocol.js   MCP JSON-RPC handling
+src/tools.js      Tool schemas + handlers (input validation)
+src/providers.js  Nominatim / Overpass / OSRM clients (timeouts, errors)
+src/config.js     Env var parsing and defaults
+src/http.js       Response, CORS and auth helpers
+src/util.js       Validation and geometry helpers
+test/             node:test suites with a mocked global fetch
+```
 
 ## Deployment
 
 ```bash
-# Upload via CF API
-curl -X PUT \
-  "https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/workers/scripts/geo-mcp-worker" \
-  -H "X-Auth-Email: <EMAIL>" \
-  -H "X-Auth-Key: <API_KEY>" \
-  -F "metadata=@/tmp/metadata.json;type=application/json" \
-  -F "index.js=@src/index.js;type=application/javascript+module"
+npx wrangler login
+npx wrangler secret put MCP_AUTH_TOKEN      # optional, enables bearer auth
+npx wrangler deploy \
+  --var BUILD_SHA:$(git rev-parse --short HEAD) \
+  --var BUILD_TIME:$(date -u +%FT%TZ)
 ```
 
-`metadata.json`:
-```json
-{ "main_module": "index.js", "compatibility_date": "2026-04-08" }
-```
+Use a scoped Cloudflare API token (`CLOUDFLARE_API_TOKEN`, "Edit Cloudflare Workers" template) for CI or non-interactive deploys. Don't use the Global API Key.
 
-## Expansion Roadmap
+### Usage limits of the public upstreams
 
-See [GEO_TRANSIT_RESEARCH_REPORT.txt](./GEO_TRANSIT_RESEARCH_REPORT.txt) for the full survey of 28 projects.
+The default upstreams are free community services with fair-use policies: Nominatim allows at most 1 request/second, and Overpass and the OSRM/FOSSGIS routers throttle heavy users. For production traffic, set `MCP_AUTH_TOKEN` so the endpoint isn't open to everyone, set an identifying `USER_AGENT`, and consider self-hosted instances (the `*_URL` vars).
+
+## Expansion roadmap
+
+See [docs/GEO_TRANSIT_RESEARCH_REPORT.md](./docs/GEO_TRANSIT_RESEARCH_REPORT.md) for the full survey of 28 projects.
 
 | Layer | Solution | Coverage | Status |
 |---|---|---|---|
@@ -246,7 +284,6 @@ See [GEO_TRANSIT_RESEARCH_REPORT.txt](./GEO_TRANSIT_RESEARCH_REPORT.txt) for the
 | Layer 1 | Transitous | International public transit | Researched, not deployed |
 | Layer 2 | Amap (高德) API | China public transit | Researched, not deployed |
 
-
 ## License
 
-This project is licensed under the GNU General Public License v3.0 — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GNU General Public License v3.0. See the [LICENSE](LICENSE) file for details.
